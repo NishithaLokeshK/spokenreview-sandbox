@@ -2,7 +2,7 @@ import { Tilt } from "./fx";
 import HeroDemo from "./HeroDemo";
 import { Icon, Logo, Spinner, Waveform } from "./ui";
 
-const DEMO_PR = "https://github.com/NishithaLokeshK/spokenreview-sandbox/pull/2";
+const DEMO_PR = "https://github.com/NishithaLokeshK/spokenreview-sandbox/pull/3";
 
 const STEPS = [
   {
