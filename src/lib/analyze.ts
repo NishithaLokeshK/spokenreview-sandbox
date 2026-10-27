@@ -134,11 +134,13 @@ async function callAnthropic(prompt: string): Promise<ToolInput> {
   return block.input as ToolInput;
 }
 
-async function callGemini(prompt: string): Promise<ToolInput> {
-  const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+// Free-tier models get overloaded in bursts, so walk a list until one answers.
+const GEMINI_FALLBACKS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash"];
+
+async function callGeminiModel(model: string, prompt: string): Promise<ToolInput> {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(15_000),
     headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY! },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM }] },
@@ -151,10 +153,23 @@ async function callGemini(prompt: string): Promise<ToolInput> {
     }),
   });
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(`Gemini: ${data?.error?.message ?? res.statusText}`);
+  if (!res.ok) throw new Error(`Gemini ${model}: ${data?.error?.message ?? res.statusText}`);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Gemini returned no review.");
+  if (!text) throw new Error(`Gemini ${model} returned no review.`);
   return JSON.parse(text) as ToolInput;
+}
+
+async function callGemini(prompt: string): Promise<ToolInput> {
+  const models = [...new Set([process.env.GEMINI_MODEL || "gemini-3.1-flash-lite", ...GEMINI_FALLBACKS])];
+  let lastError: Error | null = null;
+  for (const model of models) {
+    try {
+      return await callGeminiModel(model, prompt);
+    } catch (e) {
+      lastError = e as Error; // overloaded, retired, slow or malformed: try the next model
+    }
+  }
+  throw new Error(`${lastError?.message ?? "Gemini failed."} (tried ${models.length} models)`);
 }
 
 export async function analyzeSpokenReview(

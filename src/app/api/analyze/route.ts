@@ -3,6 +3,8 @@ import { GitHubError, getPullRequest } from "@/lib/github";
 import { rateLimited, resolvePr } from "@/lib/guard";
 import { partitionByAnchor } from "@/lib/review";
 
+export const maxDuration = 60;
+
 type Body = { prUrl: string; utterances: Utterance[] };
 
 export async function POST(request: Request) {
