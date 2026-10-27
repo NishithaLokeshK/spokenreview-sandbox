@@ -4,6 +4,7 @@ import { useState } from "react";
 import { anchorOf, type CodeLine, type DiffFile, type DiffRow, type Side } from "@/lib/diff";
 import type { PullRequest } from "@/lib/github";
 import type { DraftComment } from "@/lib/review";
+import { useVoiceReview } from "./useVoiceReview";
 
 type Selection = { path: string; side: Side; hunk: number; start: number; end: number };
 type PostResult = { url: string; inline: number; orphaned: number };
@@ -33,6 +34,40 @@ export default function ReviewApp() {
   const [summary, setSummary] = useState("");
   const [posting, setPosting] = useState(false);
   const [result, setResult] = useState<PostResult | null>(null);
+
+  const voice = useVoiceReview();
+  const [typed, setTyped] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+
+  async function generateComments() {
+    if (voice.recording) voice.stop();
+    setAnalyzing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prUrl, utterances: voice.buildUtterances() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setDrafts((ds) => [...ds, ...(data.comments as DraftComment[])]);
+      const extra = (data.general as string[]).map((g) => `- ${g}`).join("\n");
+      setSummary((s) => [s, data.summary, extra].filter(Boolean).join("\n\n"));
+      voice.clear();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  function addTyped(e: React.FormEvent) {
+    e.preventDefault();
+    if (!typed.trim()) return;
+    voice.addTyped(typed);
+    setTyped("");
+  }
 
   async function loadPr(e: React.FormEvent) {
     e.preventDefault();
@@ -140,6 +175,51 @@ export default function ReviewApp() {
 
       {pr && (
         <>
+          <div className="sticky top-0 z-10 mb-4 rounded-md border border-zinc-700 bg-zinc-900/95 p-3 backdrop-blur">
+            <div className="flex flex-wrap items-center gap-2">
+              {voice.supported ? (
+                <button
+                  onClick={voice.recording ? voice.stop : voice.start}
+                  className={`rounded-md px-4 py-2 text-sm font-medium ${
+                    voice.recording ? "bg-red-600 hover:bg-red-500" : "bg-sky-600 hover:bg-sky-500"
+                  }`}
+                >
+                  {voice.recording ? "● Stop mic" : "🎤 Start talking"}
+                </button>
+              ) : (
+                <span className="text-xs text-zinc-400">Voice needs Chrome or Edge. Type below instead.</span>
+              )}
+              <form onSubmit={addTyped} className="flex flex-1 gap-2">
+                <input
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  placeholder="…or type/dictate here (Wispr works), then hover the line you mean and press Enter"
+                  className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-sky-500"
+                />
+              </form>
+              <button
+                onClick={generateComments}
+                disabled={analyzing || voice.spoken.length === 0}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {analyzing ? "Thinking…" : `Turn into comments (${voice.spoken.length})`}
+              </button>
+            </div>
+            {voice.micError && <p className="mt-2 text-xs text-red-400">{voice.micError}</p>}
+            {(voice.spoken.length > 0 || voice.interim) && (
+              <ul className="mt-2 max-h-28 space-y-1 overflow-y-auto text-xs text-zinc-300">
+                {voice.spoken.map((u, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="flex-1">“{u.text}”</span>
+                    <button onClick={() => voice.removeAt(i)} className="text-zinc-500 hover:text-red-400">
+                      remove
+                    </button>
+                  </li>
+                ))}
+                {voice.interim && <li className="italic text-zinc-500">“{voice.interim}”</li>}
+              </ul>
+            )}
+          </div>
           <h2 className="mb-4 text-lg font-medium">
             <a href={pr.url} target="_blank" rel="noreferrer" className="hover:underline">
               {pr.title}
