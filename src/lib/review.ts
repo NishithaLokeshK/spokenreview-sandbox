@@ -7,6 +7,7 @@ export type DraftComment = {
   line: number;
   startLine?: number; // set for multi-line comments; must share side and hunk with `line`
   body: string;
+  ai?: boolean; // drafted by the model from speech, so the UI can badge it
 };
 
 export type GitHubReviewComment = {

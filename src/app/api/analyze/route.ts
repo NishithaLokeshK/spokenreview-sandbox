@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const pr = await getPullRequest(ref);
     const analysis = await analyzeSpokenReview(pr.title, pr.files, utterances.slice(0, 60));
 
-    const drafts = analysis.comments.map((c) => ({ ...c, id: crypto.randomUUID() }));
+    const drafts = analysis.comments.map((c) => ({ ...c, id: crypto.randomUUID(), ai: true }));
     const { inline, orphaned } = partitionByAnchor(pr.files, drafts);
     const anchored = new Set(inline.map((c) => `${c.path}:${c.side}:${c.line}`));
 

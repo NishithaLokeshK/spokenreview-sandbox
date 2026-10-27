@@ -39,7 +39,10 @@ export function useVoiceReview() {
   const [interim, setInterim] = useState("");
   const [spoken, setSpoken] = useState<Spoken[]>([]);
   const [micError, setMicError] = useState<string | null>(null);
+  // The diff line under the cursor right now, so the UI can show what is being tracked.
+  const [hot, setHot] = useState<{ path: string; side: Side; line: number } | null>(null);
 
+  const hotKey = useRef("");
   const t0 = useRef(0);
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const trace = useRef<Sample[]>([]);
@@ -63,13 +66,25 @@ export function useVoiceReview() {
       const p = pointer.current;
       if (!p) return;
       const el = document.elementFromPoint(p.x, p.y)?.closest<HTMLElement>("[data-line]");
-      if (!el) return;
-      trace.current.push({
+      if (!el) {
+        if (hotKey.current) {
+          hotKey.current = "";
+          setHot(null);
+        }
+        return;
+      }
+      const sample = {
         t: now(),
         path: el.dataset.path!,
         side: el.dataset.side as Side,
         line: Number(el.dataset.line),
-      });
+      };
+      trace.current.push(sample);
+      const key = `${sample.path}:${sample.side}:${sample.line}`;
+      if (key !== hotKey.current) {
+        hotKey.current = key;
+        setHot({ path: sample.path, side: sample.side, line: sample.line });
+      }
       if (trace.current.length > 6000) trace.current.splice(0, 1000);
     }, SAMPLE_MS);
     return () => {
@@ -159,5 +174,5 @@ export function useVoiceReview() {
     });
   }, [spoken]);
 
-  return { supported, recording, interim, spoken, micError, start, stop, addTyped, removeAt, clear, buildUtterances };
+  return { supported, recording, interim, spoken, micError, hot, start, stop, addTyped, removeAt, clear, buildUtterances };
 }

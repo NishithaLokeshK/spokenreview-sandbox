@@ -1,25 +1,40 @@
 "use client";
 
-import { useState } from "react";
-import { anchorOf, type CodeLine, type DiffFile, type DiffRow, type Side } from "@/lib/diff";
+import { useEffect, useState } from "react";
+import { anchorOf, type CodeLine } from "@/lib/diff";
 import type { PullRequest } from "@/lib/github";
 import type { DraftComment } from "@/lib/review";
+import DiffFileCard, { type Selection } from "./DiffFileCard";
+import Hero from "./Hero";
+import { Icon, Logo, Spinner } from "./ui";
+import VoiceDock from "./VoiceDock";
 import { useVoiceReview } from "./useVoiceReview";
 
-type Selection = { path: string; side: Side; hunk: number; start: number; end: number };
 type PostResult = { url: string; inline: number; orphaned: number };
 
-function inSelection(sel: Selection | null, path: string, row: DiffRow) {
-  if (!sel || sel.path !== path || row.kind === "hunk") return false;
-  const { side, line } = anchorOf(row);
-  return side === sel.side && line >= sel.start && line <= sel.end;
+function Banner({ tone, children, onClose }: { tone: "error" | "ok"; children: React.ReactNode; onClose: () => void }) {
+  const styles = tone === "error" ? "border-live/40 bg-live/10 text-red-200" : "border-ok/40 bg-ok/10 text-emerald-200";
+  return (
+    <div role={tone === "error" ? "alert" : "status"} className={`rise mb-4 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${styles}`}>
+      <Icon name={tone === "error" ? "x" : "check"} className="mt-0.5 size-4 shrink-0" />
+      <div className="min-w-0 flex-1">{children}</div>
+      <button onClick={onClose} aria-label="Dismiss" className="opacity-60 transition-opacity hover:opacity-100">
+        <Icon name="x" className="size-4" />
+      </button>
+    </div>
+  );
 }
 
-function suggestionFor(file: DiffFile, sel: Selection) {
-  const lines = file.rows
-    .filter((r): r is CodeLine => r.kind !== "hunk" && r.kind !== "del" && inSelection(sel, file.path, r))
-    .map((r) => r.text);
-  return "```suggestion\n" + lines.join("\n") + "\n```";
+function Skeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="skeleton h-8 w-2/3 rounded-lg" />
+      <div className="skeleton h-5 w-1/3 rounded-lg" />
+      {[0, 1].map((i) => (
+        <div key={i} className="skeleton h-64 rounded-xl" />
+      ))}
+    </div>
+  );
 }
 
 export default function ReviewApp() {
@@ -36,8 +51,46 @@ export default function ReviewApp() {
   const [result, setResult] = useState<PostResult | null>(null);
 
   const voice = useVoiceReview();
-  const [typed, setTyped] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+
+  async function loadPr(e?: React.FormEvent, urlOverride?: string) {
+    e?.preventDefault();
+    const url = urlOverride ?? prUrl;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/pr?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setPr(data);
+      setDrafts([]);
+      setSelection(null);
+      setSummary("");
+      voice.clear();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // A shared link like /?pr=<github pr url> opens straight into the review screen.
+  useEffect(() => {
+    const url = new URLSearchParams(window.location.search).get("pr");
+    if (!url) return;
+    const id = setTimeout(() => {
+      setPrUrl(url);
+      void loadPr(undefined, url);
+    }, 0);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function startDemo(url: string) {
+    setPrUrl(url);
+    loadPr(undefined, url);
+  }
 
   async function generateComments() {
     if (voice.recording) voice.stop();
@@ -59,32 +112,6 @@ export default function ReviewApp() {
       setError((err as Error).message);
     } finally {
       setAnalyzing(false);
-    }
-  }
-
-  function addTyped(e: React.FormEvent) {
-    e.preventDefault();
-    if (!typed.trim()) return;
-    voice.addTyped(typed);
-    setTyped("");
-  }
-
-  async function loadPr(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    try {
-      const res = await fetch(`/api/pr?url=${encodeURIComponent(prUrl)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setPr(data);
-      setDrafts([]);
-      setSelection(null);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -133,6 +160,7 @@ export default function ReviewApp() {
       setResult(data);
       setDrafts([]);
       setSummary("");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -140,208 +168,117 @@ export default function ReviewApp() {
     }
   }
 
-  return (
-    <div className="mx-auto w-full max-w-6xl px-4 pb-40 pt-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">SpokenReview</h1>
-        <p className="text-sm text-zinc-400">Point at a line, say what&apos;s wrong, ship a real GitHub review.</p>
-      </header>
-
-      <form onSubmit={loadPr} className="mb-6 flex gap-2">
-        <input
-          value={prUrl}
-          onChange={(e) => setPrUrl(e.target.value)}
-          placeholder="https://github.com/owner/repo/pull/1"
-          className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-sky-500"
-        />
-        <button
-          disabled={loading}
-          className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium hover:bg-sky-500 disabled:opacity-50"
-        >
-          {loading ? "Loading…" : "Load PR"}
-        </button>
-      </form>
-
-      {error && <p className="mb-4 rounded-md border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
+  const banners = (
+    <>
+      {error && <Banner tone="error" onClose={() => setError(null)}>{error}</Banner>}
       {result && (
-        <p className="mb-4 rounded-md border border-emerald-800 bg-emerald-950 px-3 py-2 text-sm text-emerald-300">
+        <Banner tone="ok" onClose={() => setResult(null)}>
           Review posted with {result.inline} inline comment{result.inline === 1 ? "" : "s"}
           {result.orphaned > 0 && ` and ${result.orphaned} moved to the summary`}.{" "}
-          <a href={result.url} target="_blank" rel="noreferrer" className="underline">
+          <a href={result.url} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">
             Open on GitHub
           </a>
-        </p>
+        </Banner>
       )}
+    </>
+  );
 
-      {pr && (
-        <>
-          <div className="sticky top-0 z-10 mb-4 rounded-md border border-zinc-700 bg-zinc-900/95 p-3 backdrop-blur">
-            <div className="flex flex-wrap items-center gap-2">
-              {voice.supported ? (
-                <button
-                  onClick={voice.recording ? voice.stop : voice.start}
-                  className={`rounded-md px-4 py-2 text-sm font-medium ${
-                    voice.recording ? "bg-red-600 hover:bg-red-500" : "bg-sky-600 hover:bg-sky-500"
-                  }`}
-                >
-                  {voice.recording ? "● Stop mic" : "🎤 Start talking"}
-                </button>
-              ) : (
-                <span className="text-xs text-zinc-400">Voice needs Chrome or Edge. Type below instead.</span>
-              )}
-              <form onSubmit={addTyped} className="flex flex-1 gap-2">
-                <input
-                  value={typed}
-                  onChange={(e) => setTyped(e.target.value)}
-                  placeholder="…or type/dictate here (Wispr works), then hover the line you mean and press Enter"
-                  className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-sky-500"
-                />
-              </form>
-              <button
-                onClick={generateComments}
-                disabled={analyzing || voice.spoken.length === 0}
-                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
-              >
-                {analyzing ? "Thinking…" : `Turn into comments (${voice.spoken.length})`}
-              </button>
-            </div>
-            {voice.micError && <p className="mt-2 text-xs text-red-400">{voice.micError}</p>}
-            {(voice.spoken.length > 0 || voice.interim) && (
-              <ul className="mt-2 max-h-28 space-y-1 overflow-y-auto text-xs text-zinc-300">
-                {voice.spoken.map((u, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="flex-1">“{u.text}”</span>
-                    <button onClick={() => voice.removeAt(i)} className="text-zinc-500 hover:text-red-400">
-                      remove
-                    </button>
-                  </li>
-                ))}
-                {voice.interim && <li className="italic text-zinc-500">“{voice.interim}”</li>}
-              </ul>
-            )}
-          </div>
-          <h2 className="mb-4 text-lg font-medium">
-            <a href={pr.url} target="_blank" rel="noreferrer" className="hover:underline">
-              {pr.title}
-            </a>
-          </h2>
-          {pr.files.map((file) => (
-            <section key={file.path} className="mb-6 overflow-hidden rounded-md border border-zinc-800">
-              <div className="border-b border-zinc-800 bg-zinc-900 px-3 py-2 font-mono text-sm">
-                {file.path} <span className="text-zinc-500">({file.status})</span>
-              </div>
-              {file.rows.length === 0 ? (
-                <p className="px-3 py-2 text-sm text-zinc-500">No diff to show (binary or too large).</p>
-              ) : (
-                <div className="font-mono text-xs">
-                  {file.rows.map((row, i) => {
-                    if (row.kind === "hunk") {
-                      return (
-                        <div key={i} className="bg-sky-950/40 px-3 py-1 text-sky-300/80">
-                          {row.text}
-                        </div>
-                      );
-                    }
-                    const { side, line } = anchorOf(row);
-                    const selected = inSelection(selection, file.path, row);
-                    const isSelectionEnd = selected && selection!.end === line;
-                    const lineDrafts = drafts.filter((d) => d.path === file.path && d.side === side && d.line === line);
-                    const tint =
-                      row.kind === "add" ? "bg-emerald-950/50" : row.kind === "del" ? "bg-red-950/50" : "";
+  if (!pr && !loading) {
+    return (
+      <>
+        <div className="mx-auto w-full max-w-3xl px-4 pt-6">{banners}</div>
+        <Hero prUrl={prUrl} setPrUrl={setPrUrl} loading={loading} onSubmit={(e) => loadPr(e)} onDemo={startDemo} />
+      </>
+    );
+  }
 
-                    return (
-                      <div key={i}>
-                        <div
-                          data-path={file.path}
-                          data-side={side}
-                          data-line={line}
-                          onClick={(e) => selectRow(file.path, row, e.shiftKey)}
-                          className={`flex cursor-pointer ${tint} ${selected ? "!bg-sky-900/60" : "hover:bg-zinc-800/80"}`}
-                        >
-                          <span className="w-12 shrink-0 select-none px-2 text-right text-zinc-600">{row.oldLine ?? ""}</span>
-                          <span className="w-12 shrink-0 select-none px-2 text-right text-zinc-600">{row.newLine ?? ""}</span>
-                          <span className="w-4 shrink-0 select-none text-zinc-500">
-                            {row.kind === "add" ? "+" : row.kind === "del" ? "-" : " "}
-                          </span>
-                          <pre className="whitespace-pre-wrap break-all pr-3">{row.text || " "}</pre>
-                        </div>
+  const adds = pr?.files.reduce((n, f) => n + f.rows.filter((r) => r.kind === "add").length, 0) ?? 0;
+  const dels = pr?.files.reduce((n, f) => n + f.rows.filter((r) => r.kind === "del").length, 0) ?? 0;
+  const repo = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
 
-                        {lineDrafts.map((d) => (
-                          <div key={d.id} className="flex items-start gap-2 border-y border-zinc-800 bg-zinc-900 px-4 py-2 font-sans text-sm">
-                            <pre className="flex-1 whitespace-pre-wrap font-sans">
-                              {d.startLine !== undefined && <span className="text-zinc-500">Lines {d.startLine}–{d.line}: </span>}
-                              {d.body}
-                            </pre>
-                            <button
-                              onClick={() => setDrafts((ds) => ds.filter((x) => x.id !== d.id))}
-                              className="text-xs text-zinc-500 hover:text-red-400"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-
-                        {isSelectionEnd && (
-                          <div className="border-y border-sky-800 bg-zinc-900 p-3 font-sans">
-                            <textarea
-                              autoFocus
-                              value={composer}
-                              onChange={(e) => setComposer(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Escape") setSelection(null);
-                                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) addDraft();
-                              }}
-                              placeholder="Say or type your comment… (Ctrl+Enter to add, Esc to cancel)"
-                              rows={3}
-                              className="w-full rounded-md border border-zinc-700 bg-zinc-950 p-2 text-sm outline-none focus:border-sky-500"
-                            />
-                            <div className="mt-2 flex gap-2 text-sm">
-                              <button onClick={addDraft} className="rounded-md bg-sky-600 px-3 py-1 hover:bg-sky-500">
-                                Add comment
-                              </button>
-                              {selection!.side === "RIGHT" && (
-                                <button
-                                  onClick={() => setComposer((c) => (c ? c + "\n\n" : "") + suggestionFor(file, selection!))}
-                                  className="rounded-md border border-zinc-700 px-3 py-1 hover:bg-zinc-800"
-                                >
-                                  Insert suggestion
-                                </button>
-                              )}
-                              <button onClick={() => setSelection(null)} className="px-3 py-1 text-zinc-400 hover:text-zinc-200">
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          ))}
-        </>
-      )}
-
-      {drafts.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-end gap-3 px-4 py-3">
-            <textarea
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder="Optional review summary"
-              rows={2}
-              className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 p-2 text-sm outline-none focus:border-sky-500"
+  return (
+    <div className="w-full">
+      <header className="sticky top-0 z-20 border-b border-line bg-bg/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
+          <button onClick={() => { setPr(null); setError(null); }} aria-label="Back to start">
+            <Logo />
+          </button>
+          <form onSubmit={(e) => loadPr(e)} className="ml-auto flex min-w-0 max-w-md flex-1 items-center gap-2">
+            <input
+              value={prUrl}
+              onChange={(e) => setPrUrl(e.target.value)}
+              aria-label="Pull request URL"
+              placeholder="https://github.com/owner/repo/pull/1"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-panel px-3 py-1.5 text-sm outline-none placeholder:text-mute/60 focus:border-accent"
             />
             <button
-              onClick={submitReview}
-              disabled={posting}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
+              disabled={loading}
+              className="flex items-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm transition-colors hover:bg-panel-2 disabled:opacity-50"
             >
-              {posting ? "Posting…" : `Submit review (${drafts.length})`}
+              {loading && <Spinner className="size-3.5" />}
+              Load
             </button>
-          </div>
+          </form>
         </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-4 pb-[26rem] pt-8">
+        {banners}
+
+        {loading || !pr ? (
+          <Skeleton />
+        ) : (
+          <>
+            <div className="mb-6">
+              <div className="mb-2 flex items-center gap-2 text-sm text-mute">
+                <Icon name="git" className="size-4" />
+                <span className="font-mono">{repo ? `${repo[1]} #${repo[2]}` : "pull request"}</span>
+                <span className="font-mono text-xs">· {pr.headSha.slice(0, 7)}</span>
+              </div>
+              <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+                <a href={pr.url} target="_blank" rel="noreferrer" className="hover:underline hover:underline-offset-4">
+                  {pr.title}
+                </a>
+              </h1>
+              <p className="mt-2 text-sm text-mute">
+                {pr.files.length} file{pr.files.length === 1 ? "" : "s"} changed ·{" "}
+                <span className="font-mono text-ok">+{adds}</span> <span className="font-mono text-live">−{dels}</span>
+              </p>
+            </div>
+
+            <div className="space-y-5">
+              {pr.files.map((file) => (
+                <DiffFileCard
+                  key={file.path}
+                  file={file}
+                  selection={selection}
+                  hot={voice.hot}
+                  recording={voice.recording}
+                  drafts={drafts.filter((d) => d.path === file.path)}
+                  composer={composer}
+                  setComposer={setComposer}
+                  onSelect={(row, extend) => selectRow(file.path, row, extend)}
+                  onCancel={() => setSelection(null)}
+                  onAdd={addDraft}
+                  onRemoveDraft={(id) => setDrafts((ds) => ds.filter((x) => x.id !== id))}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </main>
+
+      {pr && (
+        <VoiceDock
+          voice={voice}
+          analyzing={analyzing}
+          onGenerate={generateComments}
+          draftCount={drafts.length}
+          summary={summary}
+          setSummary={setSummary}
+          posting={posting}
+          onPost={submitReview}
+        />
       )}
     </div>
   );
