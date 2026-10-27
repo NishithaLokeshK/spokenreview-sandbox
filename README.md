@@ -9,7 +9,7 @@ Built for the WeMakeDevs x Wispr Flow "No Hands" challenge, with the build itsel
 ## Try it
 
 1. Open the app and paste a PR URL, for example `https://github.com/NishithaLokeshK/spokenreview-sandbox/pull/3`.
-2. Click **Start talking** (Chrome or Edge) and hover over the code as you speak. No mic? Type or dictate into the text box instead, then hover the line you mean.
+2. Press **M** or tap the mic (Chrome or Edge), then hover over the code as you speak. No mic? Type or dictate into the text box instead, and name the line in your sentence ("line 9 ...").
 3. Click **Turn into comments**, edit anything you like, and **Submit review**.
 4. Open the PR on GitHub to see the inline comments.
 
