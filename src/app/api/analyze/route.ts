@@ -1,36 +1,24 @@
-import { analyzeSpokenReview, type Utterance } from "@/lib/analyze";
-import { GitHubError, getPullRequest, parsePrUrl } from "@/lib/github";
+import { analyzeSpokenReview, hasAiKey, type Utterance } from "@/lib/analyze";
+import { GitHubError, getPullRequest } from "@/lib/github";
+import { rateLimited, resolvePr } from "@/lib/guard";
 import { partitionByAnchor } from "@/lib/review";
 
 type Body = { prUrl: string; utterances: Utterance[] };
 
-// Crude per-IP limiter so a public demo can't burn the Anthropic key. Resets on cold start.
-const WINDOW_MS = 10 * 60_000;
-const MAX_CALLS = 20;
-const hits = new Map<string, number[]>();
-
-function rateLimited(ip: string) {
-  const now = Date.now();
-  const recent = (hits.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
-  recent.push(now);
-  hits.set(ip, recent);
-  return recent.length > MAX_CALLS;
-}
-
 export async function POST(request: Request) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "local";
-  if (rateLimited(ip)) {
+  if (rateLimited(request, "analyze", 20)) {
     return Response.json({ error: "Too many requests. Try again in a few minutes." }, { status: 429 });
   }
 
   const { prUrl, utterances } = (await request.json()) as Body;
-  const ref = parsePrUrl(prUrl ?? "");
-  if (!ref) return Response.json({ error: "Invalid pull request URL." }, { status: 400 });
+  const resolved = resolvePr(prUrl);
+  if ("error" in resolved) return Response.json({ error: resolved.error }, { status: resolved.status });
+  const { ref } = resolved;
   if (!Array.isArray(utterances) || utterances.length === 0) {
     return Response.json({ error: "Say or type something first." }, { status: 400 });
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return Response.json({ error: "Server has no ANTHROPIC_API_KEY set." }, { status: 500 });
+  if (!hasAiKey()) {
+    return Response.json({ error: "Server has no GEMINI_API_KEY or ANTHROPIC_API_KEY set." }, { status: 500 });
   }
 
   try {

@@ -67,6 +67,7 @@ Rules:
 <replacement lines>
 \`\`\`
   Suggestions are only valid on RIGHT side lines (added or context lines), never on deleted lines.
+  A suggestion must be correct code: only use identifiers that exist in the diff or that the reviewer said, and if the rename would also need other lines changed, say so in the comment instead of suggesting a broken one-line edit.
 - Anything not tied to a line goes in general_comments. summary is one or two sentences for the review body.
 - Ignore filler, false starts, and speech that is not review feedback.`;
 
@@ -103,30 +104,67 @@ type ToolInput = {
   general_comments: string[];
 };
 
-export async function analyzeSpokenReview(
-  title: string,
-  files: DiffFile[],
-  utterances: Utterance[],
-): Promise<Analysis> {
-  const client = new Anthropic(); // reads ANTHROPIC_API_KEY
+// Gemini's free tier needs no billing; Anthropic is used when only that key is configured.
+export function hasAiKey() {
+  return Boolean(process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY);
+}
 
+function userPrompt(title: string, files: DiffFile[], utterances: Utterance[]) {
+  return `PR title: ${title}
+
+DIFF (each code line is prefixed L<n> or R<n>):
+${renderDiff(files)}
+
+SPOKEN REVIEW:
+${renderUtterances(utterances)}`;
+}
+
+async function callAnthropic(prompt: string): Promise<ToolInput> {
+  const client = new Anthropic(); // reads ANTHROPIC_API_KEY
   const msg = await client.messages.create({
     model: MODEL,
     max_tokens: 4096,
     system: SYSTEM,
     tools: [TOOL],
     tool_choice: { type: "tool", name: TOOL.name },
-    messages: [
-      {
-        role: "user",
-        content: `PR title: ${title}\n\nDIFF (each code line is prefixed L<n> or R<n>):\n${renderDiff(files)}\n\nSPOKEN REVIEW:\n${renderUtterances(utterances)}`,
-      },
-    ],
+    messages: [{ role: "user", content: prompt }],
   });
-
   const block = msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
   if (!block) throw new Error("The model returned no review.");
-  const input = block.input as ToolInput;
+  return block.input as ToolInput;
+}
+
+async function callGemini(prompt: string): Promise<ToolInput> {
+  const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    signal: AbortSignal.timeout(45_000),
+    headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY! },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: TOOL.input_schema,
+        temperature: 0.2,
+      },
+    }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(`Gemini: ${data?.error?.message ?? res.statusText}`);
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Gemini returned no review.");
+  return JSON.parse(text) as ToolInput;
+}
+
+export async function analyzeSpokenReview(
+  title: string,
+  files: DiffFile[],
+  utterances: Utterance[],
+): Promise<Analysis> {
+  const prompt = userPrompt(title, files, utterances);
+  const useGemini = process.env.AI_PROVIDER === "anthropic" ? false : Boolean(process.env.GEMINI_API_KEY);
+  const input = useGemini ? await callGemini(prompt) : await callAnthropic(prompt);
 
   return {
     summary: input.summary ?? "",

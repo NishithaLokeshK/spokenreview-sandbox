@@ -1,12 +1,18 @@
-import { GitHubError, getPullRequest, parsePrUrl, postReview } from "@/lib/github";
+import { GitHubError, getPullRequest, postReview } from "@/lib/github";
+import { rateLimited, resolvePr } from "@/lib/guard";
 import { buildReviewBody, partitionByAnchor, type DraftComment } from "@/lib/review";
 
 type Body = { prUrl: string; summary?: string; comments: DraftComment[] };
 
 export async function POST(request: Request) {
+  if (rateLimited(request, "review", 10)) {
+    return Response.json({ error: "Too many requests. Try again in a few minutes." }, { status: 429 });
+  }
+
   const { prUrl, summary = "", comments } = (await request.json()) as Body;
-  const ref = parsePrUrl(prUrl ?? "");
-  if (!ref) return Response.json({ error: "Invalid pull request URL." }, { status: 400 });
+  const resolved = resolvePr(prUrl);
+  if ("error" in resolved) return Response.json({ error: resolved.error }, { status: resolved.status });
+  const { ref } = resolved;
   if (!Array.isArray(comments) || comments.length === 0) {
     return Response.json({ error: "Add at least one comment first." }, { status: 400 });
   }
