@@ -5,6 +5,7 @@ import { anchorOf, type CodeLine } from "@/lib/diff";
 import type { PullRequest } from "@/lib/github";
 import type { DraftComment } from "@/lib/review";
 import DiffFileCard, { type Selection } from "./DiffFileCard";
+import { Confetti, CursorGlow } from "./fx";
 import Hero from "./Hero";
 import { Icon, Logo, Spinner } from "./ui";
 import VoiceDock from "./VoiceDock";
@@ -52,6 +53,7 @@ export default function ReviewApp() {
 
   const voice = useVoiceReview();
   const [analyzing, setAnalyzing] = useState(false);
+  const [celebrate, setCelebrate] = useState(0);
 
   async function loadPr(e?: React.FormEvent, urlOverride?: string) {
     e?.preventDefault();
@@ -158,6 +160,7 @@ export default function ReviewApp() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setResult(data);
+      setCelebrate((c) => c + 1);
       setDrafts([]);
       setSummary("");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -198,7 +201,15 @@ export default function ReviewApp() {
 
   return (
     <div className="w-full">
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="orb -left-32 top-20 size-[26rem] bg-accent/20 [animation:drift-a_20s_ease-in-out_infinite]" />
+        <div className="orb -right-32 top-1/2 size-[24rem] bg-cyan/15 [animation:drift-b_24s_ease-in-out_infinite]" />
+        <div className="orb bottom-0 left-1/3 size-[22rem] bg-pink/15 [animation:drift-a_26s_ease-in-out_infinite]" />
+      </div>
+      <Confetti fire={celebrate} />
+      <CursorGlow active={voice.recording} />
       <header className="sticky top-0 z-20 border-b border-line bg-bg/80 backdrop-blur-xl">
+        <div className="rainbow-bar h-0.5" />
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
           <button onClick={() => { setPr(null); setError(null); }} aria-label="Back to start">
             <Logo />

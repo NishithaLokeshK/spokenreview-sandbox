@@ -70,6 +70,7 @@ export default function DiffFileCard(p: Props) {
 
   return (
     <section className="overflow-hidden rounded-xl border border-line bg-panel shadow-[0_1px_0_0_rgb(255_255_255/0.03)_inset]">
+      <div className="rainbow-bar h-0.5" />
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
@@ -120,8 +121,8 @@ export default function DiffFileCard(p: Props) {
                       selected
                         ? "bg-accent/20"
                         : isHot
-                          ? "bg-live/15 shadow-[inset_3px_0_0_var(--live)]"
-                          : `${tint} hover:bg-white/[0.04]`
+                          ? "hot-line bg-live/15"
+                          : `${tint} hover:bg-gradient-to-r hover:from-accent/20 hover:to-transparent`
                     }`}
                   >
                     <span className="pointer-events-none absolute left-1 top-1/2 grid size-4 -translate-y-1/2 place-items-center rounded bg-accent text-white opacity-0 transition-opacity group-hover:opacity-100">
@@ -140,7 +141,7 @@ export default function DiffFileCard(p: Props) {
                   </div>
 
                   {lineDrafts.map((d) => (
-                    <div key={d.id} className="rise border-y border-line bg-bg/60 px-4 py-3 font-sans">
+                    <div key={d.id} className={`pop border-y border-l-4 border-y-line bg-bg/60 px-4 py-3 font-sans ${d.ai ? "border-l-cyan" : "border-l-warn"}`}>
                       <div className="flex items-start gap-3">
                         <span
                           className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-full ${

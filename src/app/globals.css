@@ -1,13 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #090a0f;
-  --panel: #10121a;
-  --panel-2: #161923;
-  --line: #242836;
-  --fg: #e8eaf1;
-  --mute: #8b91a4;
+  --bg: #07080d;
+  --panel: #0f111a;
+  --panel-2: #161926;
+  --line: #262b3d;
+  --fg: #eceef6;
+  --mute: #8d94ab;
   --accent: #8b7bff;
+  --cyan: #22d3ee;
+  --pink: #f472b6;
+  --lime: #a3e635;
   --live: #ff5a5f;
   --ok: #34d399;
   --warn: #fbbf24;
@@ -21,6 +24,9 @@
   --color-fg: var(--fg);
   --color-mute: var(--mute);
   --color-accent: var(--accent);
+  --color-cyan: var(--cyan);
+  --color-pink: var(--pink);
+  --color-lime: var(--lime);
   --color-live: var(--live);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
@@ -28,22 +34,25 @@
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
 html {
   color-scheme: dark;
 }
 
 body {
-  background:
-    radial-gradient(60rem 30rem at 50% -10%, rgb(139 123 255 / 0.14), transparent 70%),
-    radial-gradient(40rem 24rem at 90% 0%, rgb(255 90 95 / 0.06), transparent 70%),
-    var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
+  overflow-x: hidden;
 }
 
 ::selection {
-  background: rgb(139 123 255 / 0.35);
+  background: rgb(139 123 255 / 0.4);
 }
 
 * {
@@ -52,47 +61,85 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--cyan);
   outline-offset: 2px;
 }
 
+/* ---------- keyframes ---------- */
 @keyframes wave {
-  0%, 100% { transform: scaleY(0.25); }
+  0%, 100% { transform: scaleY(0.2); }
   50% { transform: scaleY(1); }
 }
-
 @keyframes ring {
-  0% { transform: scale(1); opacity: 0.55; }
-  100% { transform: scale(1.9); opacity: 0; }
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(2.1); opacity: 0; }
 }
-
 @keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
+@keyframes pop {
+  0% { opacity: 0; transform: scale(0.8) translateY(6px); }
+  60% { transform: scale(1.03) translateY(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
 @keyframes shimmer {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
 }
+@keyframes spin-angle {
+  to { --angle: 360deg; }
+}
+@keyframes drift-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(60px, 40px, 0) scale(1.12); }
+}
+@keyframes drift-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-70px, 30px, 0) scale(1.18); }
+}
+@keyframes floor {
+  to { background-position: 0 56px; }
+}
+@keyframes hue {
+  to { background-position: 200% 50%; }
+}
+@keyframes bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -10px; }
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
+@keyframes hot {
+  0%, 100% { box-shadow: inset 3px 0 0 var(--live), 0 0 0 0 rgb(255 90 95 / 0); }
+  50% { box-shadow: inset 3px 0 0 var(--live), 0 0 24px -4px rgb(255 90 95 / 0.6); }
+}
 
+/* ---------- waveform ---------- */
 .wave-bar {
   transform-origin: center;
   transform: scaleY(var(--h, 0.4));
 }
-
 .is-live .wave-bar {
-  animation: wave 1s ease-in-out infinite;
+  animation: wave 0.9s ease-in-out infinite;
   animation-delay: var(--d, 0s);
 }
+.rainbow .wave-bar:nth-child(1) { background: var(--cyan); }
+.rainbow .wave-bar:nth-child(2) { background: var(--accent); }
+.rainbow .wave-bar:nth-child(3) { background: var(--pink); }
+.rainbow .wave-bar:nth-child(4) { background: var(--warn); }
+.rainbow .wave-bar:nth-child(5) { background: var(--pink); }
+.rainbow .wave-bar:nth-child(6) { background: var(--accent); }
+.rainbow .wave-bar:nth-child(7) { background: var(--cyan); }
 
-.ring-pulse {
-  animation: ring 1.6s ease-out infinite;
-}
-
-.rise {
-  animation: rise 0.25s ease-out both;
-}
+/* ---------- utilities ---------- */
+.ring-pulse { animation: ring 1.5s ease-out infinite; }
+.rise { animation: rise 0.28s ease-out both; }
+.pop { animation: pop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.bob { animation: bob 5s ease-in-out infinite; }
+.caret::after { content: "▍"; margin-left: 1px; color: var(--cyan); animation: blink 1s steps(1) infinite; }
+.hot-line { animation: hot 1.2s ease-in-out infinite; }
 
 .skeleton {
   background: linear-gradient(90deg, var(--panel) 25%, var(--panel-2) 50%, var(--panel) 75%);
@@ -100,11 +147,95 @@ body {
   animation: shimmer 1.6s linear infinite;
 }
 
+.rainbow-text {
+  background: linear-gradient(90deg, var(--accent), var(--cyan), var(--pink), var(--warn), var(--accent));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: hue 6s linear infinite;
+}
+
+.rainbow-bar {
+  background: linear-gradient(90deg, var(--cyan), var(--accent), var(--pink), var(--warn), var(--cyan));
+  background-size: 200% 100%;
+  animation: hue 5s linear infinite;
+}
+
+/* Animated gradient outline that follows the element's border radius. */
+.conic { position: relative; }
+.conic::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from var(--angle), var(--cyan), var(--accent), var(--pink), var(--warn), var(--cyan));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: spin-angle 3.5s linear infinite;
+  pointer-events: none;
+}
+
+/* Chunky buttons that physically press down. */
+.btn-3d {
+  --edge: #4a3bc4;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 4px 0 0 var(--edge),
+    0 12px 22px -8px rgb(0 0 0 / 0.6);
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, filter 0.15s;
+}
+.btn-3d:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
+.btn-3d:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 1px 0 0 var(--edge), 0 4px 10px -6px rgb(0 0 0 / 0.6);
+}
+.btn-3d:disabled { box-shadow: none; }
+
+/* ---------- 3D scene ---------- */
+.tilt {
+  transform: perspective(1000px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out;
+  will-change: transform;
+}
+.tilt-glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 0.14), transparent 45%);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.tilt:hover .tilt-glare { opacity: 1; }
+
+.orb { position: absolute; border-radius: 9999px; filter: blur(70px); pointer-events: none; }
+
+.floor {
+  position: absolute;
+  left: -30%;
+  right: -30%;
+  bottom: 0;
+  height: 60%;
+  transform: perspective(500px) rotateX(64deg);
+  transform-origin: bottom;
+  background-image:
+    linear-gradient(rgb(139 123 255 / 0.4) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(34 211 238 / 0.3) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+  animation: floor 3s linear infinite;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .is-live .wave-bar,
-  .ring-pulse,
-  .rise,
-  .skeleton {
-    animation: none;
+  .is-live .wave-bar, .ring-pulse, .rise, .pop, .bob, .caret::after, .hot-line,
+  .skeleton, .rainbow-text, .rainbow-bar, .conic::before, .floor, .orb {
+    animation: none !important;
   }
+  .tilt { transform: none; }
 }

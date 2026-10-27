@@ -6,6 +6,8 @@ import type { useVoiceReview } from "./useVoiceReview";
 
 type Voice = ReturnType<typeof useVoiceReview>;
 
+const CHIP_TONES = ["border-cyan/50", "border-accent/50", "border-pink/50", "border-warn/50", "border-lime/50"];
+
 function Timer() {
   const [secs, setSecs] = useState(0);
   useEffect(() => {
@@ -83,7 +85,7 @@ export default function VoiceDock({ voice, analyzing, onGenerate, draftCount, su
             <button
               onClick={onPost}
               disabled={posting}
-              className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-ok px-4 text-sm font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="btn-3d flex h-10 shrink-0 items-center gap-2 rounded-xl bg-ok px-4 text-sm font-semibold text-bg [--edge:#13795a] disabled:opacity-50"
             >
               {posting ? <Spinner /> : <Icon name="send" />}
               {posting ? "Posting…" : "Post review"}
@@ -93,7 +95,7 @@ export default function VoiceDock({ voice, analyzing, onGenerate, draftCount, su
 
         <div
           className={`rounded-2xl border bg-panel/95 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl transition-colors ${
-            recording ? "border-live/50" : "border-line"
+            recording ? "conic border-transparent" : "border-line"
           }`}
         >
           {count > 0 && (
@@ -101,7 +103,7 @@ export default function VoiceDock({ voice, analyzing, onGenerate, draftCount, su
               {voice.spoken.map((u, i) => (
                 <li
                   key={i}
-                  className="rise group flex max-w-full items-center gap-1.5 rounded-full border border-line bg-panel-2 py-1 pl-3 pr-1.5 text-xs"
+                  className={`pop group flex max-w-full items-center gap-1.5 rounded-full border bg-panel-2 py-1 pl-3 pr-1.5 text-xs ${CHIP_TONES[i % CHIP_TONES.length]}`}
                 >
                   <span className="truncate">{u.text}</span>
                   <button
@@ -126,7 +128,7 @@ export default function VoiceDock({ voice, analyzing, onGenerate, draftCount, su
                 {recording && <span className="ring-pulse absolute inset-0 rounded-full bg-live" />}
                 <span
                   className={`relative grid size-11 place-items-center rounded-full text-white transition-colors ${
-                    recording ? "bg-live" : "bg-accent hover:opacity-90"
+                    recording ? "bg-live" : "bg-gradient-to-br from-accent to-pink hover:brightness-110"
                   }`}
                 >
                   <Icon name={recording ? "stop" : "mic"} className="size-5" />
@@ -140,7 +142,7 @@ export default function VoiceDock({ voice, analyzing, onGenerate, draftCount, su
 
             <div className="min-w-0 flex-1">
               <div className={`flex items-center gap-2 ${recording ? "text-live" : "text-mute"}`}>
-                <Waveform active={recording} />
+                <Waveform active={recording} className="rainbow" />
                 {recording && <Timer />}
                 <span className="truncate text-sm text-fg">
                   {voice.interim ? (
@@ -161,7 +163,7 @@ export default function VoiceDock({ voice, analyzing, onGenerate, draftCount, su
             <button
               onClick={onGenerate}
               disabled={analyzing || count === 0}
-              className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-[#5b4be0] px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:from-panel-2 disabled:to-panel-2 disabled:text-mute"
+              className="btn-3d flex h-10 shrink-0 items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-[#5b4be0] px-4 text-sm font-semibold text-white disabled:from-panel-2 disabled:to-panel-2 disabled:text-mute"
             >
               {analyzing ? <Spinner /> : <Icon name="sparkle" />}
               <span className="hidden sm:inline">{analyzing ? "Reading your review…" : "Turn into comments"}</span>
